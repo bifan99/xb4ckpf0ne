@@ -1,0 +1,178 @@
+#include <iostream>
+#include <sstream>
+#include <vector>
+std::vector<std::string> split(std::string,char);
+std::string DecryptSessionPacket(std::string str) {
+    std::string encrypted_string;
+    for (int i = 1; i < str.length(); i++)
+    {
+        if (str[i] == 0xE) { return encrypted_string; }
+        unsigned char firstbyte = str[i] - 0xF;
+        unsigned char secondbyte = firstbyte;
+        secondbyte &= 0xF0;
+        firstbyte =    firstbyte - secondbyte;
+        secondbyte >>=    0x4;
+        switch (secondbyte)
+        {
+        case 0:
+            encrypted_string +=    ' ';
+        break;
+        case 1:
+            encrypted_string +=    ' ';
+        break;
+        case 2:
+            encrypted_string +=    '-';
+        break;
+        case 3:
+            encrypted_string +=    '.';
+        break;
+        default:
+            secondbyte += 0x2C;
+            encrypted_string +=    secondbyte;
+        break;
+        }
+        switch (firstbyte)
+        {
+        case 0:
+            encrypted_string += ' ';
+        break;
+ 
+        case 1:
+            encrypted_string += ' ';
+        break;
+ 
+        case 2:
+            encrypted_string += '-';
+        break;
+ 
+        case 3:
+            encrypted_string += '.';
+        break;
+ 
+        default:
+            firstbyte += 0x2C;
+            encrypted_string += firstbyte;
+        break;
+        }
+    }
+        return encrypted_string;
+}
+std::string EncryptPacket(std::string str)
+{
+    std::string encrypted_string;
+    std::vector<std::string> buffer;
+    buffer = split(str, ' ');
+    encrypted_string += buffer[0].length();
+    for (int i = 0 ; i < str.length(); i++)
+    {
+        if (i == buffer[0].length())
+        {
+            int size = str.length() - buffer[0].length();
+            encrypted_string +=    size;
+        }
+        encrypted_string +=    str[i] ^ 0xFF;
+    }
+    return encrypted_string += 0xFF;
+}
+std::string DecryptPacket(unsigned char str[])
+{
+    std::string decrypted_string;
+    char table[] = {' ','-','.','0','1','2','3','4','5','6','7','8','9','n'};
+    int count = 0;
+    for (count = 0; count < strlen((const char*)str); )
+    {
+        if (str[count] <= 0x7A)
+        {
+            unsigned char len = str[count];
+            for (int i = 0; i < (int)len; i++)
+            {
+                count++;
+                decrypted_string += str[count] ^ 0xFF;
+            }
+            count++;
+        } else
+        {
+            unsigned char len = str[count];
+            len &= 0x7F;
+            for (int i = 0; i < (int)len;)
+            {
+                count++;
+                unsigned char highbyte = str[count];
+                highbyte &= 0xF0;
+                highbyte >>= 0x4;
+                unsigned char lowbyte = str[count];
+                lowbyte &= 0x0F;
+                if (highbyte != 0x0 && highbyte != 0xF)
+                {
+                    decrypted_string += table[highbyte-1];
+                    i++;
+                }
+                if (lowbyte != 0x0 && lowbyte != 0xF)
+                {
+                    decrypted_string += table[lowbyte-1];
+                    i++;
+                }
+            }
+            count ++;
+        }
+    }
+    return decrypted_string;
+}
+std::string DecryptPacket(int session_id, unsigned char *str, int length)
+{
+    std::string encrypted_string = "";
+    int session_key = session_id & 0xFF;
+    unsigned char session_number = session_id >> 6;
+    session_number &= 0xFF;
+    session_number &= 0x80000003;
+    switch (session_number)
+    {
+    case 0:
+        for (int i = 0; i < length; i++)
+        {
+                unsigned char firstbyte = session_key + 0x40;
+                unsigned char highbyte = str[i] - firstbyte;
+                encrypted_string += highbyte;
+        }
+    break;
+ 
+    case 1:
+        for (int i = 0; i < length; i++)
+        {
+                unsigned char firstbyte = session_key + 0x40;
+                unsigned char highbyte = str[i] + firstbyte;
+                encrypted_string += highbyte;
+        }
+    break;
+ 
+    case 2:
+        for (int i = 0; i < length; i++)
+        {
+                unsigned char firstbyte = session_key + 0x40;
+                unsigned char highbyte = str[i] - firstbyte ^ 0xC3;
+                encrypted_string += highbyte;
+        }
+    break;
+ 
+    case 3:
+        for (int i = 0; i < length; i++)
+        {
+          unsigned char firstbyte = session_key + 0x40;
+          unsigned char highbyte = str[i] + firstbyte ^ 0xC3;
+          encrypted_string += highbyte;
+        }
+    break;
+ 
+    default:
+        encrypted_string += 0xF;
+    break;
+    }
+    std::vector<std::string> temp = split(encrypted_string, 0xFF);
+    std::string save = "";
+    for (int i = 0; i < temp.size(); i++)
+    {
+        save += DecryptGamePacket2((unsigned char*)temp[i].c_str());
+        save += 0xFF;
+    }
+    return save;
+}
